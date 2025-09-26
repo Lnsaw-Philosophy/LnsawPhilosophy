@@ -177,7 +177,7 @@
 传统的对于RESTful的理解是基于资源操作这一点，我认为这种理解方式存在很大的缺陷，而基于“现实与指令思想”的Lnsaw API则提供了一种更好视角。
 
 ### Lnsaw Api 与 RESTful Api 的对比
-| **Mehtod** | **RESTful API** | **Lnsaw API** |
+| **method** | **RESTful API** | **Lnsaw API** |
 | - | - | - |
 | **Post** | 新建一个资源 | 要求API执行一个/多个指令 |
 | **Get** | 获取一个资源 | 要求API返回一个/多个实体 |
