@@ -1,0 +1,49 @@
+{
+  "globalId": "DateTime.Utc +_+ GUID",
+  "parentId": null,
+  "selfId": "DateTime.Utc +_+ GUID",
+  "dispatch": {
+    "envelope": {
+      "postedAt": "2025-11-21T10:40:00.000Z",
+      "letterType": "DO",
+      "sender": {
+        "actorType": "NaturalPerson",
+        "actor": "anonymity",
+        "agent": "bot:browser_chrome_edge"
+      },
+      "receiver": {
+        "endpoint": "https://actorcenter.lnsaw.com:443",
+        "route": [
+          "/api/auth"
+        ],
+        "actor":[]
+      },
+      "intent": [
+        "NaturalPerson.Login"
+      ]
+    },
+    "letter": [
+      {
+        "username": "zhangsan",
+        "password": "encrypted_hash"
+      }
+    ]
+  },
+  "reply": {
+    "content": [
+      {
+        "respondedAt": "",
+        "code": 200,
+        "data": {}
+      }
+    ],
+    "internal": [
+      {
+        "check": true,
+        "updatePassword": true,
+        "PutAcotrLog": "send success"
+      }
+    ],
+    "journey": []
+  }
+}
