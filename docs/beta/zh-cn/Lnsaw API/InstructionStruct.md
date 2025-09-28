@@ -483,11 +483,9 @@ curl -X POST https://test-env/replay \
 #### 2.压力测试智能化
 ```JSON
 {
-{
   "replay_mode": "stress_test",     // 压测模式：忽略注解，专注性能
   "instruction": "{原始指令}",
   "annotations": {}  // 压测时不需要解释业务
-}
 }
 ```
 **价值**：用真实业务流量做压测，比人工构造数据更贴近真实场景
