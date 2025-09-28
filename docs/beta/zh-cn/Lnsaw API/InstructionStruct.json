@@ -6,8 +6,8 @@
     "envelope": {
       "postedAt": "2025-11-21T10:40:00.000Z",
       "InstructionType": "DO",
-      "dispatchType":"json",
-      "replyType":"json",
+      "dispatchType": "json",
+      "replyType": "json",
       "sender": {
         "actorType": "NaturalPerson",
         "actor": "anonymity",
@@ -40,7 +40,7 @@
     "letter": [
       {
         "code": 200,
-        "message":"",
+        "message": "",
         "data": {}
       }
     ],
@@ -54,3 +54,4 @@
     "journey": []
   }
 }
+
