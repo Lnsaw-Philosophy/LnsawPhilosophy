@@ -5,7 +5,9 @@
   "dispatch": {
     "envelope": {
       "postedAt": "2025-11-21T10:40:00.000Z",
-      "letterType": "DO",
+      "InstructionType": "DO",
+      "dispatchType":"json",
+      "replyType":"json",
       "sender": {
         "actorType": "NaturalPerson",
         "actor": "anonymity",
@@ -16,7 +18,7 @@
         "route": [
           "/api/auth"
         ],
-        "actor":[]
+        "actor": []
       },
       "intent": [
         "NaturalPerson.Login"
@@ -30,10 +32,15 @@
     ]
   },
   "reply": {
-    "content": [
+    "receipt ": {
+      "replyAt": "...",
+      "protocolStatus": "completed",
+      "protocolCode": "200"
+    },
+    "letter": [
       {
-        "respondedAt": "",
         "code": 200,
+        "message":"",
         "data": {}
       }
     ],
