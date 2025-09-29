@@ -77,8 +77,10 @@
   + **route**：**路由路径**。一个路径数组，用于指定应用内部的具体处理节点。此字段是实现批量请求等高级路由策略的关键依据。
     >["/api/auth"]
   + **actor**:**目标Actor**。除了使用路径抽象，也可直接指定一个或多个具体的 Bot Actor 作为接收者。其路由逻辑与 `route` 数组类似，为实现更精细的指令分发提供了可能。
-    >["bot:auth_service_v1"]
-    >["bot:gateway_asia_1", "bot:gateway_eu_1"]
+    + **actorType**:**actory的类型**。
+    + **actorId**:需要加前缀，方便解析具体是什么Id,默认/省略是 actorId
+      >["actorId:auth_service_v1"]
+      >["token:gateway_asia_1", "jwt:gateway_eu_1"]
   + **【重要约束】**：`actor` 与 `route` 数组在指令中互斥，不可同时使用。 此约束确保了在批量请求等场景下，指令能够被清晰、准确地路由。
 + **intent**：**业务意图**，一个意图数组，用于声明指令需要达成的业务目标。**此字段与 receiver 协同工作，是实现批量请求和复杂业务流的核心。** 其内容可根据业务需求高度自定义，为系统提供了极大的表达灵活性。
   >["NaturalPerson.Login"]
@@ -232,20 +234,327 @@ graph TD
 将传统的“一问一答”式通信，升维为“需求清单”式的批量协商。这不仅是性能优化，更是通信范式的本质变革。
 ### 规范和模式
 为实现批量请求，指令的构造需遵循以下规则与模式。
-#### 基本原则
+### 基本原则
 + **单一性**：一次批量指令只能包含一种 InstructionType。
 + **一致性**：一次批量指令只能指向一个 receiver.endpoint。
 + **互斥性**：receiver 中的 actor 与 route 数组不可混用。
-#### 支持的模式
+### 支持的批量请求模式
 根据 `receiver.actor/receiver.route	`、`intent`、`letter` 三个数组长度的不同组合，可实现多种批量请求模式。
+#### 1.多目标，多任务，多参数
+
+**定义**：
+在此模式下，receiver.actor（或 receiver.route）、intent、letter 三个数组的**长度必须严格相等（N = N = N）**。这表示：**将 N 个不同的任务，连同其专属的参数，分发给 N 个不同的专业目标去执行**。
+这就像一份**工作分包清单**，清单上的每一行，都明确指定了“**交给谁**”、“**做什么事**”、“**用什么做**”。
+**【重要约束】**：即使不同任务的 letter 参数内容完全相同，也必须在每个对应的数组位置完整声明。协议处理器依赖精确的数组索引对齐来进行路由，而非参数内容的异同。
+
+**场景：盖房子（工作流分发）**
+假设有一个总控Bot（GeneralContractorBot）收到一个 [“House.Build”] 的指令。它需要将这个宏大任务拆解并分发给各个专业团队。总控Bot发出的分包指令如下：
+```JSON
+{
+  "instructionType": "DO",
+  "receiver": {
+    "actor": [ // 5个目标 (N=5)
+        {"actorType": "bot","actorId": "foundation_team"},
+        {"actorType": "bot","actorId": "framing_team"},
+        {"actorType": "bot","actorId": "plumbing_team"},
+        {"actorType": "bot","actorId": "electrical_team"},
+        {"actorType": "bot","actorId": "painting_team"}
+    ]
+  },
+  "intent": [ // 5个任务 (N=5)
+    "Foundation.Build",
+    "Frame.Construct",
+    "Plumbing.Install",
+    "Wiring.Install",
+    "Surface.Paint"
+  ],
+  "letter": [ // 5份参数 (N=5)，即使内容相同也需独立声明
+    {
+      "blueprint": "foundation_v3.pdf",
+      "depth": "2 meters"
+    },
+    {
+      "blueprint": "frame_v3.pdf",
+      "material": "prefabricated_wood"
+    },
+    {
+      "blueprint": "plumbing_layout.pdf",
+      "fixtureList": ["sink", "toilet", "shower"]
+    },
+    { // 假设电工和管道工需要用同一份总平面图
+      "blueprint": "site_plan.pdf", // 此内容与letter[2]不同，但即使相同也不能省略
+      "wiringDiagram": "wiring_diagram.pdf"
+    },
+    { // 假设油漆也需要总平面图，即使与letter[3]中部分内容相同，也必须完整重复
+      "blueprint": "site_plan.pdf", // 重复内容，但必须声明
+      "color": "eggshell_white"
+    }
+  ]
+}
+```
+**关键解读**
++ **1.严格对齐与独立性**：数组索引 [0] 到 [4] 必须严格对应。每个 letter[i] 都被视为 receiver.actor[i] 的独立、专属上下文，即使其 JSON 内容与其他 letter[j] 完全相同。
++ **2.协议确定性**：这样做消除了二义性。网关或路由器可以无条件地根据索引 i 将 (intent[i], letter[i]) 路由到 receiver.actor[i]，无需也不应该去解析和比较 letter 内容是否重复。
++ **3.实现简化**：接收方 Bot 只需处理分配给自己的那一份 letter，无需关心整个批量指令中是否存在参数重复，逻辑更加清晰简单。
++ **4.并行与专精**：这个模式的核心价值在于并行化和专业化。五个专业团队可以同时开工，互不干扰，高效协作。
+
+#### 2.多目标，多任务，单参数
+
+**定义**
+在此模式下，receiver.actor（或 receiver.route）和 intent 数组的长度必须严格相等（N = N），但 letter 数组长度为 1。
+这表示：将 N 个不同的任务，使用同一份参数，分发给 N 个不同的专业目标去执行。
+这就像拿着同一份资料，跑多个部门办理不同的业务。
+
+**场景：商品数据同步**
+```JSON
+{
+  "instructionType": "DO", 
+  "receiver": {
+  "actor": [ // 5个目标 (N=5)
+        {"actorType": "bot","actorId": "search_service"},
+        {"actorType": "bot","actorId": "inventory_service"},
+        {"actorType": "bot","actorId": "recommend_service"},
+        {"actorType": "bot","actorId": "analytics_service"}
+      ]
+  },
+  "intent": [ // 4个不同的任务 (N=4)
+    "SearchIndex.Update",
+    "Stock.Calculate",
+    "Recommendation.Refresh",
+    "SalesStat.Precompute"
+  ],
+  "letter": [ // 只有1份参数！所有任务共享同一份商品数据
+    {
+      "file_url": "https://cdn.example.com/products_2024.csv",
+      "data_version": "v2.3"
+    }
+  ]
+}
+```
+**关键解读**
++ 1.参数共享，任务专精：所有部门收到的是同一份原始数据，但各自从中提取需要的信息，执行自己专属的任务。
++ 2.数据一致性：确保所有下游系统基于同一版本的数据进行处理。
++ 3.路由确定性：网关将同一份 letter[0] 分别路由给不同的目标，每个目标根据各自的 intent 执行不同逻辑。
++ 4.效率与一致性兼顾：既避免了数据重复传输，又保证了各系统处理逻辑的独立性。
+
+#### 3.多目标、单任务、单参数
+**定义：**
+在此模式下，receiver.actor（或 receiver.route）数组的长度为 N，但 intent 数组长度为 1，letter 数组长度也为 1。
+这表示：将同一个任务，使用同一份参数，分发给 N 个不同的目标去执行。
+这就像同一份通知或指令，同时下达给多个执行者。
+**场景：全局配置刷新**
+系统需要所有服务节点同时刷新本地缓存，使用同一份配置版本号：
+```JSON
+{
+  "instructionType": "DO",
+  "receiver": {
+    "actor": [ // N个目标
+      {"actorType": "bot","actorId": "user_service_01"},
+      {"actorType": "bot","actorId": "user_service_02"},
+      {"actorType": "bot","actorId": "order_service_01"},
+      {"actorType": "bot","actorId": "payment_service_01"}
+    ]
+  },
+  "intent": [ // 只有1个任务
+    "Cache.Refresh"
+  ],
+  "letter": [ // 只有1份参数
+    {
+      "config_version": "2024-11-21_v3"
+    }
+  ]
+}
+```
+**关键解读**
++ 1.指令完全一致：所有接收方收到的是完全相同的任务和参数。
++ 2.路由广播：网关需要将这份单一的 (intent[0], letter[0]) 组合广播给所有 receiver.actor 中的目标。
++ 3.结果独立收集：每个目标的处理结果（成功、失败、具体耗时等）会独立填充在 reply.letter 的对应位置。
++ 4.典型应用：配置下发、缓存清理、广播通知、心跳检测等需要多个节点执行相同操作的场景。
+
+
+#### 4.多目标、单任务、多参数
+**定义**
+在此模式下，receiver.actor（或 receiver.route）数组的长度为 N，intent 数组长度为 1，但 letter 数组长度为 M。
+这表示：将同一个任务，使用全部 M 份参数，分发给 N 个不同的目标去执行。每个目标都会收到并处理全部 M 份参数。
+这就像让多个评审团同时评审所有参赛作品。
+
+**响应结构下标对应关系：**
++ reply.letter[i] - 第 i 个目标（receiver.actor[i]）对所有 M 个参数的处理结果集合
++ reply.letter[i][j] - 第 i 个目标对第 j 个参数（letter[j]）的具体处理结果
+
+**场景：多重复核验证**
+金融交易系统需要多个独立的风控服务对同一批交易进行并行审核：
+```JSON
+{
+  "instructionType": "DO",
+  "receiver": {
+    "actor": [ // 3个目标 (N=3)
+      {"actorType": "bot","actorId": "risk_engine_primary"},
+      {"actorType": "bot", "actorId": "risk_engine_backup"},
+      {"actorType": "bot","actorId": "risk_engine_audit"}
+    ]
+  },
+  "intent": [ // 1个任务
+    "Transaction.RiskValidate"
+  ],
+  "letter": [ // 5份参数 (M=5)
+    {"txn_id": "TXN001","amount": 5000,"from_account": "ACC123"},
+    {"txn_id": "TXN002", "amount": 300,"from_account": "ACC789"},
+    {"txn_id": "TXN003","amount": 15000,"from_account": "ACC456"},
+    {"txn_id": "TXN004","amount": 800,"from_account": "ACC123"},
+    {"txn_id": "TXN005","amount": 2000, "from_account": "ACC789"}
+  ]
+}
+```
+**响应结构**
+```JSON
+{
+  "reply": {
+    "letter": [ // 二维数组：N × M
+      [ // reply.letter[0] - risk_engine_primary 对5个参数的处理结果
+        {"txn_id": "TXN001", "risk_level": "LOW", "score": 0.1},
+        {"txn_id": "TXN002", "risk_level": "MEDIUM", "score": 0.4},
+        {"txn_id": "TXN003", "risk_level": "HIGH", "score": 0.8},
+        {"txn_id": "TXN004", "risk_level": "LOW", "score": 0.2},
+        {"txn_id": "TXN005", "risk_level": "MEDIUM", "score": 0.3}
+      ],
+      [ // reply.letter[1] - risk_engine_backup 对5个参数的处理结果
+        {"txn_id": "TXN001", "risk_level": "LOW", "score": 0.15},
+        {"txn_id": "TXN002", "risk_level": "LOW", "score": 0.25},
+        {"txn_id": "TXN003", "risk_level": "HIGH", "score": 0.75},
+        {"txn_id": "TXN004", "risk_level": "LOW", "score": 0.18},
+        {"txn_id": "TXN005", "risk_level": "MEDIUM", "score": 0.35}
+      ],
+      [ // reply.letter[2] - risk_engine_audit 对5个参数的处理结果
+        {"txn_id": "TXN001", "risk_level": "LOW", "score": 0.12},
+        {"txn_id": "TXN002", "risk_level": "MEDIUM", "score": 0.45},
+        {"txn_id": "TXN003", "risk_level": "HIGH", "score": 0.82},
+        {"txn_id": "TXN004", "risk_level": "LOW", "score": 0.22},
+        {"txn_id": "TXN005", "risk_level": "MEDIUM", "score": 0.32}
+      ]
+    ]
+  }
+}
+```
+
+**关键解读**
++ 1.完全冗余处理：每个目标都会收到并独立处理全部 M 个参数
++ 2.下标严格对应：reply.letter[i][j] 对应第 i 个目标对第 j 个参数的处理结果
++ 3.结果交叉验证：调用方可以对比不同目标对同一参数的处理结果
++ 4.容错性强：即使某个目标故障，其他目标仍能提供完整结果
+
+**【重要提示】**
+此模式不适合直接用于负载均衡场景。负载均衡的目标是将工作负载分摊到多个处理单元，而此模式会让每个单元处理全部工作负载，实际上增加了系统总负载。
+
+仅当以下条件满足时考虑使用此模式：
++ 需要多重校验或冗余备份确保可靠性
++ 需要不同算法或逻辑对同一数据进行交叉验证
++ 能够接受 N × M 次处理带来的性能开销
++ 目标Actor是不同的专业服务（如不同风控引擎），而非同一服务的多个实例
+
+#### 5.单目标、多任务、多参数
+**定义**
+在此模式下，receiver.actor（或 receiver.route）数组的长度为 1，intent 和 letter 数组的长度必须严格相等（N = N）。
+这表示：将 N 个不同的任务，每个任务使用其专属的参数，分发给同一个目标去执行。
+**下标对应关系：**
+reply.letter[i] - 第 i 个任务（intent[i]）使用第 i 个参数（letter[i]）的处理结果
+**场景：数据处理服务批量转换**
+一个数据转换服务需要同时对多种格式的数据进行不同的转换操作：
+```JSON
+{
+  "instructionType": "DO",
+  "receiver": {
+    "actor": [ // 1个目标
+      {
+        "actorType": "bot", 
+        "actorId": "data_transformer"
+      }
+    ]
+  },
+  "intent": [ // 3个任务 (N=3)
+    "Data.Convert.ToJSON",
+    "Data.Convert.ToXML", 
+    "Data.Convert.ToCSV"
+  ],
+  "letter": [ // 3份不同的参数 (N=3)
+    {"input_data": {"name": "张三", "age": 25},"options": {"pretty": true}},
+    {"input_data": {"name": "李四", "age": 30},"options": {"encoding": "UTF-8"}},
+    {"input_data": {"name": "王五", "age": 28},"options": {"delimiter": ","}}
+  ]
+}
+```
+**关键解读**
++ 1.专业化流水线：同一个服务内部包含多个专业处理模块，形成处理流水线
++ 2.参数任务绑定：每个任务与对应的参数严格绑定，形成独立的处理上下文
++ 3.资源集中利用：所有计算都在同一个服务实例中完成，避免网络开销
++ 4.数据局部性：适合需要共享中间状态或内存数据的关联任务
++ 5.原子性控制：服务内部可以更好地控制多个任务的事务边界
+
+#### 6.单目标、单任务、多参数
+**定义：**
+在此模式下，receiver.actor（或 receiver.route）数组的长度为 1，intent 数组长度为 1，但 letter 数组长度为 M（M > 1）。
+这表示：将同一个任务，使用 M 份参数，分发给同一个目标去执行。
+
+**场景：批量用户创建**
+```JSON
+{
+  "instructionType": "DO",
+  "receiver": {
+    "actor": [ // 1个目标
+      {
+        "actorType": "bot",
+        "actorId": "user_service"
+      }
+    ]
+  },
+  "intent": [ // 1个任务
+    "User.BatchCreate"
+  ],
+  "letter": [ // M份参数 (M=3)
+    {
+      "username": "zhangsan",
+      "email": "zhangsan@example.com",
+      "password": "encrypted_123"
+    },
+    {
+      "username": "lisi",
+      "email": "lisi@example.com", 
+      "password": "encrypted_456"
+    },
+    {
+      "username": "wangwu",
+      "email": "wangwu@example.com",
+      "password": "encrypted_789"
+    }
+  ]
+}
+```
+
+**关键解读**
++ 1.批量处理：单一任务批量处理多个相似的数据项
++ 2.高效传输：一次网络请求完成多个数据项的处理，减少网络开销
++ 3.原子性控制：服务内部可以决定是整体事务还是独立处理每个参数
++ 4.结果对应：每个参数的处理结果按顺序严格对应
+
+**策略**
++ 原子事务：所有参数作为一个事务，全部成功或全部失败
++ 独立处理：每个参数独立处理，部分失败不影响其他
++ 批量优化：利用数据库批量插入等优化手段提升性能
+
 |**模式**|receiver.actor/receiver.route|intent|letter|说明|
 |-|-|-|-|-|
-|**多目标，多任务**|`N`个|`N`个|`N`个|将 N 个不同的任务分发给 N 个不同的目标。|
-|**单目标，多任务**|`1`个|`N`个|`N`个|将 N 个不同的任务发送给 1 个目标处理。|
+|**多目标，多任务，单参数**|`N`个|`N`个|`N`个|将 N 个不同的任务分发给 N 个不同的目标。|
+|**多目标，单任务，单参数**|`N`个|`N`个|`N`个|将 N 个不同的任务分发给 N 个不同的目标。|
+|**单目标，多任务，多参数**|`1`个|`N`个|`N`个|将 N 个不同的任务发送给 1 个目标处理。|
 |**单目标，单任务，多参数**|`1`个|`1`个|`N`个|将 1 个任务的 N 份参数发送给 1 个目标处理。|
 |**单目标，单任务，单参数**|`1`个|`1`个|`1`个|标准单次请求。|
 
-#### 执行策略
+**性能优势：**
++ 相比多次单条请求，大幅减少网络往返
++ 服务端可以针对批量操作进行优化
++ 适合处理大量相似操作的场景
+
+### 执行策略
 实现层应提供可配置的策略机制，以支持对批量指令采用不同的执行方式。
 
 例如，对于单目标、单任务、多参数的指令，可根据策略配置决定：

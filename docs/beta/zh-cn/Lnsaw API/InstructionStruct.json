@@ -18,7 +18,12 @@
         "route": [
           "/api/auth"
         ],
-        "actor": []
+        "actor": [
+          {
+            "actorType": "",
+            "actroyId": ""
+          }
+        ]
       },
       "intent": [
         "NaturalPerson.Login"
