@@ -1,0 +1,56 @@
+{
+  "globalId": "DateTime.Utc +_+ GUID",
+  "parentId": null,
+  "selfId": "DateTime.Utc +_+ GUID",
+  "sendLetter": {
+    "envelope": {
+      "postedAt": "2025-11-21T10:40:00.000Z",
+      "purpose": "ACT",
+      "sendLetterType": "json",
+      "replyLetterType": "json",
+      "sender": {
+        "actor": {
+          "actorType": "NaturalPerson",
+          "actorId": "anonymity"
+        },
+        "agent": {
+          "actorType": "NaturalPerson",
+          "actorId": "anonymity"
+        }
+      },
+      "receiver": {
+        "endpoint": "https://actorcenter.lnsaw.com:443",
+        "address": [
+          "/api/auth"
+        ],
+        "actor": [
+          {
+            "actorType": "",
+            "actorId": ""
+          }
+        ]
+      },
+      "intent": [
+        "NaturalPerson.Login"
+      ]
+    },
+    "letter": [],
+    "chatLog": []
+  },
+  "replyLetter": {
+    "receipt ": {
+      "replyAt": "...",
+      "postStatus": "completed",
+      "postCode": "200"
+    },
+    "letter": [
+      {
+        "code": 200,
+        "message": "",
+        "data": {}
+      }
+    ],
+    "notes": [],
+    "ChatLog": []
+  }
+}
