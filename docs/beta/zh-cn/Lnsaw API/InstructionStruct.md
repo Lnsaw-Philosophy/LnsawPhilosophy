@@ -57,6 +57,9 @@
       >“请将档案柜中‘张三’档案袋中的个人信息页拿出来扔掉，如果柜子里根本没有‘张三’的档案，什么也不用做。
   + **DEL**: **丢弃**，表示“此物我不要了，你可以将其丢弃”。此操作针对整个实体。
       >“档案柜里的‘张三’档案袋不需要了，请你把整个档案袋从档案柜中移除并销毁。”
+  + **NOTIFY**：**通知**，一种单向通信机制，用于告知接收方一个事件或状态，而不期望或要求其对通知内容本身进行业务处理。
+    + **NOTIFY-S(Silent)**：**静默通知**，发送后不期待任何形式的响应，适用于“尽力而为”的非关键事件广播。
+    + **NOTIFY-A(Acknowledged)**：**回执通知**，要求接收方必须在协议层面返回一个送达回执，以确保信息被可靠接收。
 + **dispatchType**：发信的 dispatch.letter 数据格式（如 json, xml）。
 + **replyType** 期望回信的 reply.letter 数据格式（如 json, xml）。
 + **sender**：**发件人**。表明是哪个 Actor 发送了此指令。（关于 Actor 的详细定义，请参阅 Lnsaw Actor 文档）。
@@ -82,7 +85,6 @@
   >["NaturalPerson.Login","NaturalPerson.Info"]
   >["Order.Place.Prepare","Inventory.Lock","Payment.Create"]
 
-
 #### 信文 (letter)
 
 `letter` 承载指令的具体业务参数，其角色类似于传统 RESTful 架构中的 Request Body。此字段被设计为数组格式，旨在与 `receiver`（收件人）、`intent`（业务意图）协同工作，共同构成实现批量请求的最终环节。
@@ -90,6 +92,19 @@
 + `receiver` 指定了“在哪里处理”（目标节点）。
 + `intent` 指定了“要做什么”（业务目标）。
 + `letter` 指定了“用什么做”（操作参数）。
+
+#### 溯源链 (journey)
+一个逻辑上为 List<InstructionStruct>（或等价的 InstructionStruct[]）的字段。在实现层，它可以被处理为任何编程语言中对应的集合类型（如 Object, Array, List, Vector 等），但其序列化后的形态必须符合 List<InstructionStruct> 的规范。
++ **1.最大化包容原则：**
+ + 协议无条件支持记录任意数量的原始指令。
+ + 对于由1000个 NOTIFY 触发的 DO 指令，其 dispatch.journey 就是一个包含这1000个 NOTIFY 的完整列表。这是被允许且被保障的。
++ **2.灵活性原则：**
+ + 发送方Bot充分知晓其业务特性。如果它判定原始信息不重要（如用户行为埋点），或由于性能瓶颈，可以主动将 journey 设置为 null 或空列表 []。
+ + 这成为一种明确的、由业务方做出的权衡信号，而非协议强加的限制。
++ **3.实现层优化建议**
+ + **压缩**：实现方可以对 journey 字段（尤其是当它为大型数组时）施加透明的压缩算法（如GZIP），并在接收方解压。这对协议层是完全透明的。
+ + **二进制编码**：在传输层面，整个 InstructionStruct（包括journey）可以被序列化为高效的二进制格式（如MessagePack、BSON、Protocol Buffers），而非纯粹的JSON文本，以节省带宽和提高解析速度。
+ + **智能过滤**：网关或中间件可以配置规则，对非关键业务的指令自动清理或截断过大的 journey 字段。
 
 #### json 结构
 ```json
@@ -156,7 +171,9 @@
     }
   ]
 }
-#### 日志 (journey)
+#### 溯源链 (journey)
+一个逻辑上为 List<InstructionStruct>（或等价的 InstructionStruct[]）的字段。在实现层，它可以被处理为任何编程语言中对应的集合类型（如 Object, Array, List, Vector 等），但其序列化后的形态必须符合 List<InstructionStruct> 的规范。
+
 `journey` 是整个 InstructionStruct 非常重要的一部分，它是一个 `InstructionStruct` 数组，通过它记录完整的指令树，使得 InstructionStruct 成为一个完整的指令记录实体。
 
 例如 Bot A 给 Bot B 发送了一个指令，Bot B 在处理过程中又调用了 Bot C 和 Bot D。Bot B 在向 Bot A 返回响应时，会将**它自己发出和接收的与 Bot C、Bot D 交互的完整指令体**，记录到当前指令的 `reply.journey` 数组中。这样就形成了一棵完整的指令树，实现了全链路追踪和指令回放。

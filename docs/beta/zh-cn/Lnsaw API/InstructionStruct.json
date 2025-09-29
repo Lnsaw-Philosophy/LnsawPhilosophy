@@ -29,7 +29,8 @@
         "username": "zhangsan",
         "password": "encrypted_hash"
       }
-    ]
+    ],
+    "journey": []
   },
   "reply": {
     "receipt ": {
@@ -54,4 +55,3 @@
     "journey": []
   }
 }
-
